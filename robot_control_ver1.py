@@ -17,7 +17,7 @@ class Robot:
         self.orientation_dict = {'N': [-1, 0], 'E': [0, 1], 'S': [1, 0], 'W': [0, -1]}
         self.under_robot = 0
         self.around_robot = []
-        self.robot_prediction_map = [[0 for i in range(4)] for j in range(4)]
+        self.robot_prediction_map = [[1/(4*4) for i in range(4)] for j in range(4)]
         self.robot_p_ried = {'gnus' : 0.7, 'zubp' : 0.5, 'fost' : 0.3, 'grnd' :0}
 
     def place(self, coord_x, coord_y, orientation): # ориентацию задаем в формате БУКВЫ
@@ -50,15 +50,20 @@ class Robot:
 
     def predict_place(self,real_map):
         print(self.around_robot)
+        robot_sr_pred = [[0 for i in range(4)] for j in range(4)]
         for i in range(4):
             for j in range(4):
                 result = (self.under_robot == real_map[i + 1][j + 1])
-                self.robot_prediction_map[i][j] += (0.9 * result) + (0.1 * (1 - result))
+                robot_sr_pred[i][j] += (0.9 * result) + (0.1 * (1 - result))
                 for k in range(len(self.around_robot)):
                     help_orientation_mas = [[-1,0],[0,1],[1,0],[0,-1]]
-                    result = (self.around_robot[k] == real_map[i + 1 +  help_orientation_mas[k][0]][j + 1 + help_orientation_mas[k][1]])
-                    self.robot_prediction_map[i][j] =  round(self.robot_prediction_map[i][j] * ((0.75 * result) + (0.25 * (1 - result))), 3)
-
+                    result = (self.around_robot[k] == real_map[i + 1 + help_orientation_mas[k][0]][j + 1 + help_orientation_mas[k][1]])
+                    robot_sr_pred[i][j] += ((0.75 * result) + (0.25 * (1 - result)))
+        suma = sum(sum(i) for i in robot_sr_pred)
+        robot_sr_pred = [[robot_sr_pred[j][i] / suma for i in range(4)] for j in range(4)]
+        for i in range(4):
+            for j in range(4):
+                self.robot_prediction_map[i][j] = robot_sr_pred[i][j] * self.robot_prediction_map[i][j]
         for i in self.robot_prediction_map:
             print(i)
         print('----------predict_place--------')
@@ -70,10 +75,11 @@ class Robot:
                 start_location = self.robot_prediction_map[i][j]
                 for range_mov in range(3):
                     if i + self.orientation[0] * range_mov < 4 and j + self.orientation[1] * range_mov < 4 and i + self.orientation[0] * range_mov >= 0 and j + self.orientation[1] * range_mov >= 0:
-                        new_robot_prediction_map[i + self.orientation[0] * range_mov][j + self.orientation[1] * range_mov] += round(self.p_move_arr[range_mov] * start_location * (1 - self.robot_p_ried[real_map[i + 1][j + 1]]),2)
-
+                        Z = range_mov > 0
+                        new_robot_prediction_map[i + self.orientation[0] * range_mov][j + self.orientation[1] * range_mov] += (((self.p_move_arr[range_mov] + self.robot_p_ried[real_map[i + 1][j + 1]] ) + (1 - Z)) * start_location) +  (Z * self.p_move_arr[range_mov] * start_location * (1 - self.robot_p_ried[real_map[i + 1][j + 1]]))
+# неправильно счиатется вероятность проезда по теоритории
         self.robot_prediction_map = new_robot_prediction_map
-        if random.random() > self.robot_p_ried[real_map[i + 1][j + 1]]:
+        if random.random() > self.robot_p_ried[real_map[self.robot_coord[0]][self.robot_coord[1]]]:
             if self.robot_coord[0] + self.orientation[0] - 1 < 4 and self.robot_coord[1] + self.orientation[1] - 1< 4 and self.robot_coord[0] + self.orientation[0] - 1 >=0  and self.robot_coord[1] + self.orientation[1] - 1 >= 0:
                 self.robot_coord = [self.robot_coord[0] + self.orientation[0], self.robot_coord[1] + self.orientation[1]]
         for i in self.robot_prediction_map:
@@ -109,7 +115,7 @@ class RobotGUI:
         self.maps_frame.grid(row=0, column=0, padx=10, pady=10)
         
         # Создаем канвасы для карт
-        self.real_canvas = tk.Canvas(self.maps_frame, width=400, height=400)
+        self.real_canvas = tk.Canvas(self.maps_frame, width=600, height=600)
         self.real_canvas.grid(row=0, column=0, padx=5)
         
         self.pred_canvas = tk.Canvas(self.maps_frame, width=400, height=400)
@@ -125,6 +131,14 @@ class RobotGUI:
         ttk.Button(self.control_frame, text="Sense", command=self.sense).grid(row=0, column=3, padx=5)
         ttk.Button(self.control_frame, text="Predict", command=self.predict).grid(row=0, column=4, padx=5)
         
+        self.images = {
+           # 'watr': tk.PhotoImage(file="images/watr.png"),
+            #'grnd': tk.PhotoImage(file="images/grnd.png"),
+            #'gnus': tk.PhotoImage(file="images/gnus.png"),
+           # 'zubp': tk.PhotoImage(file="images/zubp.png"),
+           # 'fost': tk.PhotoImage(file="images/fost.png")
+        }
+
         # Словарь цветов для различных типов местности
         self.colors = {
             'watr': 'blue',
@@ -137,20 +151,47 @@ class RobotGUI:
         self.draw_maps()
 
     def draw_maps(self):
+        
         # Очищаем канвасы
         self.real_canvas.delete("all")
         self.pred_canvas.delete("all")
 
-        cell_size = 60
-
-        # Рисуем реальную карту
+        cell_size = 80
         for i in range(6):
             for j in range(6):
-                color = self.colors.get(self.real_map[i][j], 'white')
-                self.real_canvas.create_rectangle(j * cell_size, i * cell_size,
-                                                  (j + 1) * cell_size, (i + 1) * cell_size,
-                                                  fill=color)
+                terrain_type = self.real_map[i][j]
+                if terrain_type in self.images:
+                    self.real_canvas.create_image(
+                        j * cell_size + cell_size/2,
+                        i * cell_size + cell_size/2,
+                        image=self.images[terrain_type]
+                    )
+                else:
+                    color = self.colors.get(self.real_map[i][j], 'white')
+                    self.real_canvas.create_rectangle(j * cell_size, i * cell_size,
+                                                              (j + 1) * cell_size, (i + 1) * cell_size,
+                                                              fill=color)
 
+                    
+        # Рисуем реальную карту
+        # for i in range(6):
+        #     for j in range(6):
+        #         color = self.colors.get(self.real_map[i][j], 'white')
+        #         self.real_canvas.create_rectangle(j * cell_size, i * cell_size,
+        #                                           (j + 1) * cell_size, (i + 1) * cell_size,
+        #                                           fill=color)
+
+        # robot_x = self.robot.robot_coord[1] * cell_size + cell_size/2
+        # robot_y = self.robot.robot_coord[0] * cell_size + cell_size/2
+        
+        # # Вычисляем угол поворота для робота
+        # angle_dict = {'N': 0, 'E': 90, 'S': 180, 'W': 270}
+        # orientation_letter = self.robot.transform_orientation(self.robot.orientation)
+        
+        # # Создаем повернутое изображение робота
+        # rotated_robot = self.robot_image.subsample(3, 3)  # Уменьшаем размер изображения
+        # self.real_canvas.create_image(robot_x, robot_y, image=rotated_robot)
+        
         # Рисуем робота
         robot_x = self.robot.robot_coord[1] * cell_size + cell_size / 2
         robot_y = self.robot.robot_coord[0] * cell_size + cell_size / 2
@@ -160,11 +201,6 @@ class RobotGUI:
         end_x = robot_x + self.robot.orientation[1] * 20
         end_y = robot_y + self.robot.orientation[0] * 20
         self.real_canvas.create_line(robot_x, robot_y, end_x, end_y, arrow=tk.LAST, width=3)
-
-        # Отладочный вывод для проверки значений
-        print("Карта вероятностей:")
-        for row in self.robot.robot_prediction_map:
-            print(row)
 
         # Рисуем карту вероятностей
         pred_cell_size = 60
