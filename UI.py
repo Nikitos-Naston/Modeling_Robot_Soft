@@ -154,11 +154,11 @@ class RobotGUI:
         # Draw robot
         robot_x = self.robot.robot_coord[1] * cell_size + cell_size / 2
         robot_y = self.robot.robot_coord[0] * cell_size + cell_size / 2
-        self.real_canvas.create_oval(robot_x - 10, robot_y - 10, robot_x + 10, robot_y + 10, fill='blue')
+        self.real_canvas.create_oval(robot_x - 20, robot_y - 20, robot_x + 20, robot_y + 20, fill='blue')
 
         # Draw robot's direction
-        end_x = robot_x + self.robot.orientation[1] * 20
-        end_y = robot_y + self.robot.orientation[0] * 20
+        end_x = robot_x + self.robot.orientation[1] * 40
+        end_y = robot_y + self.robot.orientation[0] * 40
         self.real_canvas.create_line(robot_x, robot_y, end_x, end_y, arrow=tk.LAST, width=3)
 
         # Draw probability map
@@ -216,6 +216,17 @@ class RobotGUI:
         """Start the GUI main loop"""
         self.root.mainloop()
 
+    def visualize_path(self, path):
+        map_size = len(self.real_map)
+        cell_size = min(600 // map_size, 80)
+        for x, y in path:
+                self.real_canvas.create_oval(
+                    y * cell_size + cell_size / 3,
+                    x * cell_size + cell_size / 3,
+                    y * cell_size + 2 * cell_size / 3,
+                    x * cell_size + 2 * cell_size / 3,
+                    fill='red'
+                )
     def generate_road_and_move(self, X, Y, real_map):
         """
         Generate best route to point and go alonng it
@@ -230,6 +241,8 @@ class RobotGUI:
         self.predict()
         pred_coord = self.robot.find_position()
         route = self.robot.find_optimal_path(real_map, pred_coord, (Y, X))
+        self.visualize_path(route)
+        self.root.update()
         i = 1
         while pred_coord[0] != X or pred_coord[1] != Y:
             # turns to right side
@@ -238,29 +251,42 @@ class RobotGUI:
                 need_coord = [route[i][0] - pred_coord[0], route[i][1] - pred_coord[1]]
                 our_cord_indx = (list(self.robot.orientation_dict.values()).index(self.robot.orientation))
                 need_coord_indx = (list(self.robot.orientation_dict.values()).index(need_coord))
-                if abs(need_coord_indx - our_cord_indx + 4) % 4 > abs(our_cord_indx - need_coord_indx + 4) % 4:
+                if abs(need_coord_indx - our_cord_indx + 4) % 4 < abs(our_cord_indx - need_coord_indx + 4) % 4:
                     while need_coord != self.robot.orientation:
                         self.rotate('right')
                         self.draw_maps()
+                        self.visualize_path(route)
+                        self.root.update()
                         time.sleep(2)
                 else:
                     while need_coord != self.robot.orientation:
                         self.rotate('left')
                         self.draw_maps()
+                        self.visualize_path(route)
+                        self.root.update()
                         time.sleep(2)
             # try go to point
             while pred_coord[0] != route[i][0] or pred_coord[1] != route[i][1]:
                 self.robot.move(real_map)
                 self.predict()
                 self.draw_maps()
+                self.visualize_path(route)
+                self.root.update()
                 pred_coord = self.robot.find_position()
             # check if we reach right destination
             raz_x, raz_y = pred_coord[0] - route[i][0], pred_coord[1] - route[i][1]
             if raz_x > 1 or raz_y > 1 or raz_x < -1 or raz_y < -1:
                 route = self.robot.find_optimal_path(real_map, pred_coord, (Y, X))
+                i = 1
+                self.visualize_path(route)
+                self.draw_maps()
+                self.visualize_path(route)
+                self.root.update()
             else:
                 i += 1
             self.draw_maps()
+            self.visualize_path(route)
+            self.root.update()
             time.sleep(2)
         print('FINISH')
 
