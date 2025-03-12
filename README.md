@@ -236,8 +236,9 @@ def find_optimal_path(self, map, start, end):
 1. Определение текущего положения по карте вероятности _(представлена выше)_
 2. Построение карты весов перебором возможных варинатов где ребро это вероятность застрять 
 3. Поиск оптимального пути с помощью алгоритма Дейкстры![Итоговая вероятность](https://commons.wikimedia.org/wiki/File:Dijkstra_Animation.gif?uselang=ru)
-4. Пошаговое выполнение маршрута с задержкой 2 секунды для анализа выполенения
-5. Проверка своего местонахожденя и сверка с маршрутом
+4. Визуализация оптимального пути в точку 4,4  _(к примеру)_ ![Визуализированный путь](/images_for_README/fourth.png)
+5. Пошаговое выполнение маршрута с задержкой 2 секунды для анализа выполенения
+6. Проверка своего местонахожденя и сверка с маршрутом
 # 3. Руководство по воспроизведению проекта
 
 ## 3.1 Подготовка рабочего окружения
@@ -270,6 +271,7 @@ Model_Robot_Soft/
 ### 3.2.1 Создание математической модели робота (robot_model.py)
 
 #### Шаг 1: Инициализация базового класса
+Создается класс робота и инициализируются базовые переменные описаные ниже
 ```python
 class Robot():
     def __init__(self, map_size, p_not_move=0.2):
@@ -291,6 +293,7 @@ class Robot():
 ```
 
 #### Шаг 2: Реализация сенсорной системы
+Робот сканирует местность под собой и перед со собой в 4 сторонах с помощью поворота 
 ```python
 def sense_all(self, real_map):
     # Определение типа местности под роботом
@@ -307,6 +310,7 @@ def sense_all(self, real_map):
 ```
 
 #### Шаг 3: Реализация системы локализации
+Робот проходит по всей карте и сверяет с тем что намерил робот и по этому строит картой вероятнстей
 ```python
 def predict_place(self, real_map):
     # Создаем карту предсказаний
@@ -330,13 +334,16 @@ def predict_place(self, real_map):
                                        (0.25 * (1 - result)))
 ```
 #### Шаг 3: Реализация системы движения
+Робот строит карту вероятности с помощью формулы полной вероятности, после чего проверка на реализм и если вероятность не проехать срабатывает 
+то робот остается на месте, иначе едет прямо меняя свои координаты
 ```python
 def move(self, real_map):
    new_robot_prediction_map = [[0 for i in range(self.map_size)] for j in range(self.map_size)]
-           #making predicition map
+           # создаем карту веротяности и заполняем  её 
            for i in range(self.map_size):
                for j in range(self.map_size):
                    start_location = self.robot_prediction_map[i][j]
+                   # проверяем находится ли робот у края карты и в заисимости от этого считаем вероятностей
                    if i + self.orientation[0] < self.map_size and j + self.orientation[1] < self.map_size and i + \
                            self.orientation[0] >= 0 and j + self.orientation[1] >= 0:
                        new_robot_prediction_map[i][j] += ((self.p_not_move + self.robot_p_ried[
@@ -350,12 +357,58 @@ def move(self, real_map):
                            real_map[i + 1][j + 1]]) + start_location * self.p_move * (
                                                                  1 - self.robot_p_ried[real_map[i + 1][j + 1]])
            self.robot_prediction_map = new_robot_prediction_map
-           # check for realism and move
+           # проверка правда ли робот поедет вперед с помщью случайности 
            if random.random() > self.robot_p_ried[real_map[self.robot_coord[0]][self.robot_coord[1]]]:
+               # Еслм робот поехал то меняем координаты
                if self.robot_coord[0] + self.orientation[0] - 1 < self.map_size and self.robot_coord[1] + self.orientation[1] - 1 < self.map_size and self.robot_coord[0] + self.orientation[0] - 1 >= 0 and self.robot_coord[1] + self.orientation[1] - 1 >= 0:
                    self.robot_coord = [self.robot_coord[0] + self.orientation[0],
                                        self.robot_coord[1] + self.orientation[1]]
 ```
+### Шаг 4: Определение местоположения по карте вероятности 
+Проходится по карте веротяностей определяя в каком месте стоит максимальная вероятность
+```python
+def find_position(self):
+  X, Y, max_now = 0, 0, -100
+  for i in range(len(self.robot_prediction_map)):
+      for j in range(len(self.robot_prediction_map)):
+          if self.robot_prediction_map[i][j] > max_now:
+              max_now = self.robot_prediction_map[i][j]
+              X, Y = i + 1, j + 1
+  return (X, Y)
+```
+
+### Шаг 5: Определение кратчейшего пути от точки до точки
+Строит карту вероятнсотей застревание и строит массив всех возможных путей с помощью сумирования
+После чего с помощью алгоитма дейкстры находится кратчайший путь
+```python
+def find_optimal_path(self, map, start=(2, 2), end=(5, 5)):
+  ver_map = [[self.robot_p_ried[map[j][i]] for i in range(len(map))] for j in range(len(map))]
+  dp = [[float('inf')] * len(ver_map) for _ in range(len(ver_map))]
+  prev = [[None] * len(ver_map) for _ in range(len(ver_map))]
+  dp[start[0]][start[1]] = ver_map[start[0]][start[1]]
+  queue = [(start[0], start[1])]
+  # Постройка массива с суммой вероятностей застрять и оптимальный путь 
+  while queue:
+      x, y = queue.pop(0)
+      for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+          new_x, new_y = x + dx, y + dy
+          if 0 <= new_x < len(ver_map) and 0 <= new_y < len(ver_map[0]):
+              new_prob = dp[x][y] + ver_map[new_x][new_y]
+              if new_prob < dp[new_x][new_y]:
+                  dp[new_x][new_y] = new_prob
+                  prev[new_x][new_y] = [x, y]
+                  queue.append((new_x, new_y))
+  path = []
+  curr = end
+  # Восстнанволение оптимального пути 
+  while curr is not None:
+      path.append(curr)
+      curr = prev[curr[0]][curr[1]]
+  path.reverse()
+  print(path)
+  return path
+```
+
 ### 3.2.2 Создание графического интерфейса (UI.py)
 
 #### Шаг 1: Основная структура GUI
@@ -404,7 +457,9 @@ def draw_maps(self):
                     image=photo
                 )
 ```
-
+### 3.2.3 Создание основго приложение (robot_control_ver1.py)
+Файл соединяет функциональность обеих файлов
+В этом файле создается приветсвие, настройка, создание объектов класса
 
 
 
