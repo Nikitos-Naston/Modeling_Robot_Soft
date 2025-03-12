@@ -7,7 +7,7 @@ class Robot():
     Robot class for simulating robot movement and localization on a grid map.
     """
 
-    def __init__(self, map_size, p_over_rotate=0.2, p_not_rotate=0.1, p_not_move=0.2):
+    def __init__(self, map_size, p_over_rotate=0.2, p_not_rotate=0.1, p_not_move=0.2, p_sense_under_right = 0.9, p_sense_forward_right = 0.75):
         """
         Initialize robot with movement probabilities and map parameters.
 
@@ -16,7 +16,11 @@ class Robot():
             p_over_rotate (float): Probability of over-rotating (default 0.2)
             p_not_rotate (float): Probability of not rotating (default 0.1)
             p_not_move (float): Probability of not moving (default 0.2)
+            p_sense_under_right (float): Probability of sensing under robot right (default 0.9)
+            p_sense_forward_right (float): Probability of sensing forward right (default 0.75)
         """
+        self.p_sense_under_right = p_sense_under_right
+        self.p_sense_forward_right = p_sense_forward_right
         self.p_over_rotate = p_over_rotate  # Probability of over-rotating
         self.p_not_rotate = p_not_rotate  # Probability of not rotating
         self.p_rotate = 1 - p_over_rotate - p_not_rotate  # Probability of correct rotation
@@ -28,10 +32,10 @@ class Robot():
         self.under_robot = 0  # Terrain type under robot
         self.around_robot = []  # Terrain types around robot
         self.map_size = map_size  # Size of the map
-        self.robot_prediction_map = [[1 / (map_size) for i in range(map_size)] for j in range(map_size)]  # Probability distribution of robot location
+        self.robot_prediction_map = [[1 / (map_size ** 2) for i in range(map_size)] for j in range(map_size)]  # Probability distribution of robot location
 
         # Probability of getting stuck in different terrain types
-        self.robot_p_ried = {'gnus': 0.7, 'zubp': 0.5, 'fost': 0.3, 'grnd': 0.1, 'watr': 1.0}
+        self.robot_p_ried = {'gnus': 0.7, 'zubp': 0.5, 'fost': 0.3, 'grnd': 0.0, 'watr': 1.0}
 
     def change_map_params(self, p_gnus, p_zubp, p_fost, p_grnd):
         """
@@ -131,12 +135,12 @@ class Robot():
         for i in range(self.map_size):
             for j in range(self.map_size):
                 result = (self.under_robot == real_map[i + 1][j + 1])
-                robot_sr_pred[i][j] += (0.9 * result) + (0.1 * (1 - result))
+                robot_sr_pred[i][j] += (self.p_sense_under_right * result) + ((1 - self.p_sense_under_right) * (1 - result))
                 for k in range(len(self.around_robot)):
                     help_orientation_mas = [[-1, 0], [0, 1], [1, 0], [0, -1]]
                     result = (self.around_robot[k] == real_map[i + 1 + help_orientation_mas[k][0]][
                         j + 1 + help_orientation_mas[k][1]])
-                    robot_sr_pred[i][j] += ((0.75 * result) + (0.25 * (1 - result)))
+                    robot_sr_pred[i][j] += ((self.p_sense_forward_right * result) + ((1 - self.p_sense_forward_right) * (1 - result)))
         suma = sum(sum(i) for i in robot_sr_pred)
         self.robot_prediction_map = [[robot_sr_pred[j][i] / suma for i in range(self.map_size)] for j in
                                      range(self.map_size)]
@@ -223,7 +227,7 @@ class Robot():
                                                               1 - self.robot_p_ried[real_map[i + 1][j + 1]])
         self.robot_prediction_map = new_robot_prediction_map
         # check for realism and move
-        if random.random() > self.robot_p_ried[real_map[self.robot_coord[0]][self.robot_coord[1]]]:
+        if random.random() >= self.robot_p_ried[real_map[self.robot_coord[0]][self.robot_coord[1]]]:
             if self.robot_coord[0] + self.orientation[0] - 1 < self.map_size and self.robot_coord[1] + self.orientation[1] - 1 < self.map_size and self.robot_coord[0] + self.orientation[0] - 1 >= 0 and self.robot_coord[1] + self.orientation[1] - 1 >= 0:
                 self.robot_coord = [self.robot_coord[0] + self.orientation[0],
                                     self.robot_coord[1] + self.orientation[1]]

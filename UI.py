@@ -244,7 +244,8 @@ class RobotGUI:
         self.visualize_path(route)
         self.root.update()
         i = 1
-        while pred_coord[0] != X or pred_coord[1] != Y:
+        while pred_coord[0] != Y or pred_coord[1] != X:
+            flag = False
             # turns to right side
             if pred_coord[0] + self.robot.orientation[0] != route[i][0] or pred_coord[1] + self.robot.orientation[1] != \
                     route[i][1]:
@@ -273,15 +274,19 @@ class RobotGUI:
                 self.visualize_path(route)
                 self.root.update()
                 pred_coord = self.robot.find_position()
+                raz_x, raz_y = pred_coord[0] - route[i][0], pred_coord[1] - route[i][1]
+                if raz_x > 1 or raz_y > 1 or raz_x < -1 or raz_y < -1:
+                    route = self.robot.find_optimal_path(real_map, pred_coord, (Y, X))
+                    i = 1
+                    self.visualize_path(route)
+                    self.draw_maps()
+                    self.visualize_path(route)
+                    self.root.update()
+                    flag = True
+                    break
             # check if we reach right destination
-            raz_x, raz_y = pred_coord[0] - route[i][0], pred_coord[1] - route[i][1]
-            if raz_x > 1 or raz_y > 1 or raz_x < -1 or raz_y < -1:
-                route = self.robot.find_optimal_path(real_map, pred_coord, (Y, X))
-                i = 1
-                self.visualize_path(route)
-                self.draw_maps()
-                self.visualize_path(route)
-                self.root.update()
+            if flag:
+                continue
             else:
                 i += 1
             self.draw_maps()
@@ -309,5 +314,5 @@ def generate_map(size):
     for i in range(1, size + 1):
         for j in range(1, size + 1):
             new_map[i][j] = random.choice(terrain_types)
-
     return new_map
+
